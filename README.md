@@ -1,66 +1,88 @@
-# MediQueue — Hospital & Clinic Queue Management System
+# MediQueue — Hospital & Clinic Outpatient Queue Coordination Platform
 
-> Real-time outpatient department (OPD) queue coordination, token dispatching, wait-time estimation, and role-based doctor/admin portals built with React 18, Vite, and Supabase.
+> A real-time outpatient department (OPD) queue management system providing live digital tokens, predictive wait-time modeling, and dedicated Doctor and Admin workflow portals built with React 18, Vite, and Supabase.
+
+[![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6.svg)](https://www.typescriptlang.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E.svg)](https://supabase.com/)
+[![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC.svg)](https://tailwindcss.com/)
 
 ---
 
-## 1. Project Title
-**MediQueue** (`Queue-buddy-final`) — Real-time Hospital Queue Management and Wait-Time Intelligence Platform.
+## Executive Overview
 
-## 2. Project Overview
-MediQueue is a full-stack healthcare workflow automation system designed to eliminate crowded outpatient waiting rooms. Patients receive live digital queue status, real-time token tracking, and algorithmic wait-time estimates, while healthcare professionals access dedicated Doctor and Admin dashboards to manage patient transitions seamlessly.
+MediQueue (`Queue-buddy-final`) is an enterprise-grade outpatient department (OPD) workflow coordination system engineered to eliminate physical hospital waiting room congestion. The platform replaces antiquated physical paper tokens with a synchronized digital queue infrastructure: patients monitor real-time token progression and algorithmic wait times on mobile devices, while medical personnel and administrators orchestrate patient transitions across specialized Doctor and Admin control dashboards.
 
-## 3. Problem Statement
-Traditional paper token systems in clinics lead to physical congestion, unknown wait times, and high administrative overhead. Patients cannot anticipate consultation slots, causing crowded lobbies and cross-infection risks. MediQueue provides automated, digital queue progression visible to patients and practitioners simultaneously.
+---
 
-## 4. Key Features
-- **Live Digital Token Generation:** Issue categorized tokens (General, Priority, Emergency).
-- **Algorithmic Wait-Time Prediction (`useWaitTime.ts`):** Dynamic estimations calculated from real-time doctor consultation pacing.
-- **Dedicated Doctor Dashboard (`DoctorDashboard.tsx`):** Call next patient, mark completed, or reassign cases.
-- **Hospital Admin Portal (`AdminPanel.tsx`):** Track daily OPD throughput, manage departments, and audit staff queues.
-- **PostgreSQL Supabase Backend:** Real-time subscriptions for zero-refresh queue updates.
+## Core Capabilities & Features
 
-## 5. Technology Stack
-- **Frontend:** React 18, Vite, TypeScript, Tailwind CSS, shadcn/ui, Lucide Icons
-- **Backend & Database:** Supabase (PostgreSQL, Realtime WebSockets, SQL Migrations)
-- **State & Queries:** TanStack React Query
+### Implemented Production Features
+- **Dynamic Digital Token Dispensation:** Issues categorized consultation tokens (General OPD, Specialist Review, Emergency Priority).
+- **Predictive Wait-Time Engine (`src/hooks/useWaitTime.ts`):** Dynamically computes remaining wait durations based on active physician consultation throughput.
+- **Dedicated Doctor Consultation Portal (`src/pages/DoctorDashboard.tsx`):** Enables physicians to call the next patient, flag absent tokens, complete consultations, or transfer cases.
+- **Hospital Administration Control Center (`src/pages/AdminPanel.tsx`):** Real-time monitoring of active counters, doctor allocation, daily patient volume metrics, and department queues.
+- **Live WebSocket Synchronization:** Supabase PostgreSQL Realtime subscriptions broadcast instantaneous token changes without polling overhead.
+- **Production Database Schema:** Complete version-controlled SQL migration scripts (`supabase/migrations/20260112102000_admin_doctor_features.sql`).
 
-## 6. System Architecture
+---
+
+## System Architecture
+
 ```mermaid
 flowchart TD
-    Patient([Patient Web Token App]):::client -->|Request Token| QueueAPI[Supabase Edge / Realtime]
-    QueueAPI --> DB[(Supabase PostgreSQL)]
-    DB --> Realtime[WebSocket Realtime Broadcast]
-    Realtime -->|Update Queue Position| Patient
-    Doctor([Doctor Dashboard]):::staff -->|Call Next / Complete| QueueAPI
-    Admin([Admin OPD Portal]):::staff -->|Manage Counters & Analytics| QueueAPI
-    DB --> Analytics[Throughput Analytics Engine]
+    subgraph PatientApp["Patient Interface"]
+        TokenView[Live Digital Token View]
+        WaitTime[Wait Time Estimator Hook]
+    end
 
-    classDef client fill:#3b82f6,stroke:#1d4ed8,color:#fff;
-    classDef staff fill:#8b5cf6,stroke:#7c3aed,color:#fff;
+    subgraph StaffApp["Medical Staff Interfaces"]
+        DoctorView[Doctor Dashboard - Patient Call & Complete]
+        AdminView[Admin OPD Panel - Department Throughput]
+    end
+
+    subgraph Backend["Cloud Backend (Supabase)"]
+        Postgres[(PostgreSQL Database)]
+        RealtimeEngine[WebSocket Realtime Broadcast Engine]
+        RLS[Row-Level Security Policies]
+    end
+
+    TokenView -->|Request Token| Postgres
+    DoctorView -->|Update Status: In Consultation| Postgres
+    AdminView -->|Configure Counters| Postgres
+    Postgres --> RLS
+    Postgres --> RealtimeEngine
+    RealtimeEngine -->|Broadcast Live Queue State| TokenView
+    RealtimeEngine -->|Broadcast Next Patient| DoctorView
 ```
 
-## 7. Folder Structure
-```
+---
+
+## Directory Structure
+
+```text
 Queue-buddy-final/
 ├── src/
 │   ├── components/
-│   │   ├── admin/           # Administrative controls & counter management
-│   │   ├── doctor/          # Doctor consultation controls & queue callers
-│   │   ├── home/            # Patient token generation & queue viewers
-│   │   ├── layout/          # Application headers and navigation
-│   │   └── ui/              # Modular UI library (buttons, modals, cards)
+│   │   ├── admin/           # Administrative department and counter controls
+│   │   ├── doctor/          # Doctor consultation caller and history
+│   │   ├── home/            # Public patient token generation and status viewer
+│   │   ├── layout/          # Application headers, navigation, and badges
+│   │   └── ui/              # Modular shadcn component abstractions
 │   ├── hooks/               # useWaitTime, useAuth, and queue subscription hooks
 │   ├── lib/                 # demoData, notifications, and seedData utilities
 │   ├── pages/               # AdminPanel, DoctorDashboard, Auth, and Patient Views
-│   └── integrations/        # Supabase database clients and generated types
+│   └── integrations/        # Supabase database client and generated types
 ├── supabase/
 │   └── migrations/          # Version-controlled PostgreSQL migration schemas
 ├── .env.example             # Clean environment variable specification
-└── README.md                # Technical system documentation
+└── README.md                # Master repository technical documentation
 ```
 
-## 8. Installation & Setup
+---
+
+## Setup & Installation
+
 ```bash
 # Clone the repository
 git clone https://github.com/StratagemVX/Queue-buddy-final.git
@@ -73,13 +95,21 @@ npm install
 npm run dev
 ```
 
-## 9. Environment Variables (`.env.example`)
+---
+
+## Environment Configuration (`.env.example`)
+
 ```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
 ```
 
-## 10. Author & Project Information
-- **Lead Developer:** Chethan Kumar B S (`StratagemVX`)
-- **Portfolio:** [https://github.com/StratagemVX](https://github.com/StratagemVX)
-- **Domain:** HealthTech & Full-Stack System Architecture
+---
+
+## Contributor Attribution & Profile
+
+- **Lead Engineer:** Chethan Kumar B S (`StratagemVX`)
+- **Institution:** Department of Computer Science & Engineering, MVJ College of Engineering
+- **GitHub:** [https://github.com/StratagemVX](https://github.com/StratagemVX)
+- **Portfolio:** [https://chethan-kumar-portfolio.vercel.app/](https://chethan-kumar-portfolio.vercel.app/)
+- **LinkedIn:** [https://linkedin.com/in/chethan-kumar-b-s-781a002bb](https://linkedin.com/in/chethan-kumar-b-s-781a002bb)
