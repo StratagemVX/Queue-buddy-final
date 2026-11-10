@@ -101,10 +101,14 @@ npm run dev
 
 ```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+VITE_SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key
 ```
 
 ---
+
+## Security & Deployment Notes
+
+The React client uses the Supabase publishable key. A publishable key is intended for browser use only when the database schema and Row Level Security policies correctly restrict access. Never expose `SUPABASE_SERVICE_ROLE_KEY` in a `VITE_*` variable or browser bundle; keep it only in Supabase Edge Function secrets. Verify every RLS policy and test patient, doctor, and admin authorization independently. The notification Edge Function's authentication/authorization remediation is maintained in a separate security pull request and must be reviewed and deployed before treating that endpoint as protected.
 
 ## Contributor Attribution & Profile
 
