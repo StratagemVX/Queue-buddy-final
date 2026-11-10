@@ -113,3 +113,24 @@ VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
 - **GitHub:** [https://github.com/StratagemVX](https://github.com/StratagemVX)
 - **Portfolio:** [https://chethan-kumar-portfolio.vercel.app/](https://chethan-kumar-portfolio.vercel.app/)
 - **LinkedIn:** [https://linkedin.com/in/chethan-kumar-b-s-781a002bb](https://linkedin.com/in/chethan-kumar-b-s-781a002bb)
+
+## Verification and maintenance
+
+Keep this overview aligned with the actual source and deployment configuration.
+
+### Available package scripts
+
+- `npm run dev` — `vite`
+- `npm run build` — `vite build`
+- `npm run lint` — `eslint .`
+- `npm run preview` — `vite preview`
+
+Manifest-defined commands only; execution and pass/fail status have not been verified in this documentation change.
+
+### Contribution and security notes
+
+- Keep features, architecture, screenshots, and dependency details accurate.
+- Never commit real credentials, private keys, production data, or local environment files; use placeholder-only examples and deployment-managed secrets.
+- Include steps to reproduce issues and expected versus actual behavior.
+- Name external services and environment variables without publishing secret values.
+- Run relevant build, lint, and test checks before merging.
