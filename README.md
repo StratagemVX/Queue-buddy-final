@@ -1,9 +1,9 @@
-# MediQueue — Hospital & Clinic Outpatient Queue Coordination Platform
+# MediQueue (`Queue-buddy-final`) — Hospital Outpatient Queue Coordination Platform
 
-> A real-time outpatient department (OPD) queue management system providing live digital tokens, predictive wait-time modeling, and dedicated Doctor and Admin workflow portals built with React 18, Vite, and Supabase.
+> Real-time hospital and clinic outpatient department (OPD) queue coordination system providing digital token booking, live wait-time estimation, Doctor and Admin portals, and Supabase Edge Function notifications built with React 18, TypeScript, Vite, and Supabase.
 
 [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6.svg)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6.svg)](https://www.typescriptlang.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E.svg)](https://supabase.com/)
 [![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC.svg)](https://tailwindcss.com/)
 
@@ -11,130 +11,83 @@
 
 ## Executive Overview
 
-MediQueue (`Queue-buddy-final`) is an enterprise-grade outpatient department (OPD) workflow coordination system engineered to eliminate physical hospital waiting room congestion. The platform replaces antiquated physical paper tokens with a synchronized digital queue infrastructure: patients monitor real-time token progression and algorithmic wait times on mobile devices, while medical personnel and administrators orchestrate patient transitions across specialized Doctor and Admin control dashboards.
+**MediQueue** (`Queue-buddy-final`) modernizes outpatient hospital queues by letting patients browse departments, book consultation tokens, and follow live queue status (`/departments`, `/book/:departmentId`, `/queue-status`, `/dashboard`), while doctors manage active consultations (`/doctor`) and administrators oversee counters, doctors, analytics, and system settings (`/admin`).
+
+> **Security Remediation Status (`main` vs. Open Draft PR #2 — `security/authorize-notify-edge-function`):**
+> - **PR #2** removes tracked `.env` from git; adds placeholder `.env.example`; enforces authorization, strict CORS validation, and Edge Function secret hygiene in `supabase/functions/notify-patients/index.ts`; hardens signup role assignment, Supabase RLS policies, and demo-mode gates via `supabase/migrations/20261111000000_harden_roles_and_rls.sql` and `src/lib/security.ts`; fixes lint errors; adds `typecheck` & `vitest` security tests (`src/lib/security.test.ts` — 8 tests passed); and adds `.github/workflows/quality.yml` (verified passing in CI).
 
 ---
 
-## Core Capabilities & Features
-
-### Implemented Production Features
-- **Dynamic Digital Token Dispensation:** Issues categorized consultation tokens (General OPD, Specialist Review, Emergency Priority).
-- **Predictive Wait-Time Engine (`src/hooks/useWaitTime.ts`):** Dynamically computes remaining wait durations based on active physician consultation throughput.
-- **Dedicated Doctor Consultation Portal (`src/pages/DoctorDashboard.tsx`):** Enables physicians to call the next patient, flag absent tokens, complete consultations, or transfer cases.
-- **Hospital Administration Control Center (`src/pages/AdminPanel.tsx`):** Real-time monitoring of active counters, doctor allocation, daily patient volume metrics, and department queues.
-- **Live WebSocket Synchronization:** Supabase PostgreSQL Realtime subscriptions broadcast instantaneous token changes without polling overhead.
-- **Production Database Schema:** Complete version-controlled SQL migration scripts (`supabase/migrations/20260112102000_admin_doctor_features.sql`).
-
----
-
-## System Architecture
+## Architecture & Directory Structure
 
 ```mermaid
 flowchart TD
-    subgraph PatientApp["Patient Interface"]
-        TokenView[Live Digital Token View]
-        WaitTime[Wait Time Estimator Hook]
-    end
-
-    subgraph StaffApp["Medical Staff Interfaces"]
-        DoctorView[Doctor Dashboard - Patient Call & Complete]
-        AdminView[Admin OPD Panel - Department Throughput]
-    end
-
-    subgraph Backend["Cloud Backend (Supabase)"]
-        Postgres[(PostgreSQL Database)]
-        RealtimeEngine[WebSocket Realtime Broadcast Engine]
-        RLS[Row-Level Security Policies]
-    end
-
-    TokenView -->|Request Token| Postgres
-    DoctorView -->|Update Status: In Consultation| Postgres
-    AdminView -->|Configure Counters| Postgres
-    Postgres --> RLS
-    Postgres --> RealtimeEngine
-    RealtimeEngine -->|Broadcast Live Queue State| TokenView
-    RealtimeEngine -->|Broadcast Next Patient| DoctorView
+    Patient[Patient Routes - Index, Departments, BookAppointment, QueueStatus, Dashboard] -->|Supabase Auth & Queries| Supa[(Supabase PostgreSQL + RLS)]
+    Staff[Staff Routes - DoctorDashboard & AdminPanel] -->|Role-Guarded Actions| Supa
+    Supa -->|Realtime Updates| Patient
+    Staff -->|Authenticated Trigger - PR #2| Edge[Supabase Edge Function - notify-patients]
 ```
-
----
-
-## Directory Structure
 
 ```text
 Queue-buddy-final/
+├── .github/workflows/quality.yml      # CI: npm ci, audit, typecheck, lint, test, build (PR #2)
 ├── src/
 │   ├── components/
-│   │   ├── admin/           # Administrative department and counter controls
-│   │   ├── doctor/          # Doctor consultation caller and history
-│   │   ├── home/            # Public patient token generation and status viewer
-│   │   ├── layout/          # Application headers, navigation, and badges
-│   │   └── ui/              # Modular shadcn component abstractions
-│   ├── hooks/               # useWaitTime, useAuth, and queue subscription hooks
-│   ├── lib/                 # demoData, notifications, and seedData utilities
-│   ├── pages/               # AdminPanel, DoctorDashboard, Auth, and Patient Views
-│   └── integrations/        # Supabase database client and generated types
+│   │   ├── admin/                     # AnalyticsDashboard, DepartmentManagement, DoctorManagement, SystemSettings
+│   │   ├── doctor/                    # DoctorSchedule, DoctorStats
+│   │   ├── home/                      # HeroSection, FeaturesSection, HowItWorks
+│   │   └── layout/                    # Header
+│   ├── hooks/                         # useAuth.tsx, useWaitTime.ts, use-mobile.tsx, use-toast.ts
+│   ├── integrations/supabase/         # client.ts, types.ts
+│   ├── lib/                           # security.ts & security.test.ts (PR #2), demoData.ts, notifications.ts, seedData.ts
+│   ├── pages/                         # Index, Auth, Departments, BookAppointment, QueueStatus, Dashboard, DoctorDashboard, AdminPanel, NotFound
+│   └── App.tsx
 ├── supabase/
-│   └── migrations/          # Version-controlled PostgreSQL migration schemas
-├── .env.example             # Clean environment variable specification
-└── README.md                # Master repository technical documentation
+│   ├── functions/notify-patients/     # Patient notification Edge Function
+│   └── migrations/                    # PostgreSQL schema, seed & RLS hardening SQL migrations
+├── .env.example                       # Placeholder config (PR #2)
+├── package.json
+└── README.md
 ```
 
 ---
 
-## Setup & Installation
+## Setup, Environment & Verification
 
+### Local Setup
 ```bash
-# Clone the repository
 git clone https://github.com/StratagemVX/Queue-buddy-final.git
 cd Queue-buddy-final
 
-# Install dependencies
-npm install
-
-# Start local server
+npm ci --ignore-scripts
+cp .env.example .env
 npm run dev
 ```
 
+### Environment Variables (`.env.example`)
+| Variable | Scope | Purpose |
+|---|---|---|
+| `VITE_SUPABASE_PROJECT_ID` | Client | Supabase project ID |
+| `VITE_SUPABASE_URL` | Client | Supabase API URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` / `VITE_SUPABASE_ANON_KEY` | Client | Browser publishable anon key (safe only alongside strict PostgreSQL RLS) |
+| `CORS_ALLOWED_ORIGINS`, `SUPABASE_SERVICE_ROLE_KEY` | Supabase Edge Function Secrets | Configured via `supabase secrets set`; never expose in client `VITE_*` variables |
+
+### Available Package Scripts (`package.json`)
+| Script | Command | Notes |
+|---|---|---|
+| `npm run dev` | `vite` | Start Vite dev server |
+| `npm run build` | `vite build` | Production build |
+| `npm run typecheck` | `tsc --noEmit` | Added in PR #2 |
+| `npm run lint` | `eslint .` | ESLint checks |
+| `npm test` | `vitest run` | Added in PR #2 (`src/lib/security.test.ts`) |
+| `npm run preview` | `vite preview` | Preview built output |
+
 ---
-
-## Environment Configuration (`.env.example`)
-
-```env
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key
-```
-
----
-
-## Security & Deployment Notes
-
-The React client uses the Supabase publishable key. A publishable key is intended for browser use only when the database schema and Row Level Security policies correctly restrict access. Never expose `SUPABASE_SERVICE_ROLE_KEY` in a `VITE_*` variable or browser bundle; keep it only in Supabase Edge Function secrets. Verify every RLS policy and test patient, doctor, and admin authorization independently. The notification Edge Function's authentication/authorization remediation is maintained in a separate security pull request and must be reviewed and deployed before treating that endpoint as protected.
 
 ## Contributor Attribution & Profile
 
 - **Lead Engineer:** Chethan Kumar B S (`StratagemVX`)
-- **Institution:** Department of Computer Science & Engineering, MVJ College of Engineering
+- **Related Prototype:** [StratagemVX/queue-buddy](https://github.com/StratagemVX/queue-buddy) (private preliminary prototype)
 - **GitHub:** [https://github.com/StratagemVX](https://github.com/StratagemVX)
 - **Portfolio:** [https://chethan-kumar-portfolio.vercel.app/](https://chethan-kumar-portfolio.vercel.app/)
 - **LinkedIn:** [https://linkedin.com/in/chethan-kumar-b-s-781a002bb](https://linkedin.com/in/chethan-kumar-b-s-781a002bb)
-
-## Verification and maintenance
-
-Keep this overview aligned with the actual source and deployment configuration.
-
-### Available package scripts
-
-- `npm run dev` — `vite`
-- `npm run build` — `vite build`
-- `npm run lint` — `eslint .`
-- `npm run preview` — `vite preview`
-
-Manifest-defined commands only; execution and pass/fail status have not been verified in this documentation change.
-
-### Contribution and security notes
-
-- Keep features, architecture, screenshots, and dependency details accurate.
-- Never commit real credentials, private keys, production data, or local environment files; use placeholder-only examples and deployment-managed secrets.
-- Include steps to reproduce issues and expected versus actual behavior.
-- Name external services and environment variables without publishing secret values.
-- Run relevant build, lint, and test checks before merging.
