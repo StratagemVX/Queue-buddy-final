@@ -83,7 +83,7 @@ export function SystemSettings({ useDemoMode = false }: SystemSettingsProps) {
 
     const { error } = await supabase
       .from('system_settings')
-      .upsert(updates as any, { onConflict: 'key' });
+      .upsert(updates, { onConflict: 'key' });
 
     if (error) {
       toast({ title: 'Error saving settings', description: error.message, variant: 'destructive' });

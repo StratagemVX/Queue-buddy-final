@@ -150,7 +150,7 @@ export function DoctorManagement({ useDemoMode = false }: DoctorManagementProps)
     if (editingDoctor) {
       const { error } = await supabase
         .from('doctors')
-        .update(doctorData as any)
+        .update(doctorData)
         .eq('id', editingDoctor.id);
       
       if (error) {
@@ -164,7 +164,7 @@ export function DoctorManagement({ useDemoMode = false }: DoctorManagementProps)
     } else {
       const { error } = await supabase
         .from('doctors')
-        .insert(doctorData as any);
+        .insert(doctorData);
       
       if (error) {
         toast({ title: 'Error adding doctor', description: error.message, variant: 'destructive' });
@@ -192,7 +192,7 @@ export function DoctorManagement({ useDemoMode = false }: DoctorManagementProps)
   async function toggleAvailability(doctor: Doctor) {
     const { error } = await supabase
       .from('doctors')
-      .update({ is_available: !doctor.is_available } as any)
+      .update({ is_available: !doctor.is_available })
       .eq('id', doctor.id);
     
     if (!error) fetchDoctors();

@@ -307,10 +307,15 @@ export function calculateDemoWaitTime(appointment: DemoAppointment): number {
   return (waiting + (inProgress * 0.5)) * doctor.avg_consultation_duration;
 }
 
-// Demo Mode State Management
+import { isDemoModeAllowed } from '@/lib/security';
+
+// Demo Mode State Management (restricted strictly to non-production development builds)
 let isDemoMode = false;
 
 export function enableDemoMode() {
+  if (!(import.meta.env.DEV && !import.meta.env.PROD && isDemoModeAllowed(import.meta.env))) {
+    return;
+  }
   isDemoMode = true;
   localStorage.setItem('mediqueue_demo_mode', 'true');
 }
@@ -321,6 +326,9 @@ export function disableDemoMode() {
 }
 
 export function checkDemoMode(): boolean {
+  if (!(import.meta.env.DEV && !import.meta.env.PROD && isDemoModeAllowed(import.meta.env))) {
+    return false;
+  }
   if (isDemoMode) return true;
   return localStorage.getItem('mediqueue_demo_mode') === 'true';
 }

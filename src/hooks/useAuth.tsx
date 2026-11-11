@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { resolveSelfRegistrationRole } from '@/lib/security';
 
 interface AuthContextType {
   user: User | null;
@@ -38,9 +39,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string, role: string = 'patient', phone?: string) => {
+  const signUp = async (email: string, password: string, fullName: string, _requestedRole?: string, phone?: string) => {
     const redirectUrl = `${window.location.origin}/`;
-    
+    const assignedRole = resolveSelfRegistrationRole();
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -48,10 +50,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         emailRedirectTo: redirectUrl,
         data: {
           full_name: fullName,
-          role: role,
-          phone: phone || null
-        }
-      }
+          role: assignedRole,
+          phone: phone || null,
+        },
+      },
     });
     return { error: error as Error | null };
   };
