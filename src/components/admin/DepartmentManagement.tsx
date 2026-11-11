@@ -108,7 +108,7 @@ export function DepartmentManagement({ useDemoMode = false }: DepartmentManageme
     if (editingDept) {
       const { error } = await supabase
         .from('departments')
-        .update(deptData as any)
+        .update(deptData)
         .eq('id', editingDept.id);
       
       if (error) {
@@ -122,7 +122,7 @@ export function DepartmentManagement({ useDemoMode = false }: DepartmentManageme
     } else {
       const { error } = await supabase
         .from('departments')
-        .insert(deptData as any);
+        .insert(deptData);
       
       if (error) {
         toast({ title: 'Error adding department', description: error.message, variant: 'destructive' });

@@ -21,16 +21,16 @@ export default function AdminPanel() {
   const [useDemoMode, setUseDemoMode] = useState(false);
 
   useEffect(() => {
-    // Allow demo mode access without auth
-    if (checkDemoMode()) {
+    // Allow demo mode access strictly in development builds
+    if (import.meta.env.DEV && !import.meta.env.PROD && checkDemoMode()) {
       setUseDemoMode(true);
       setIsAdmin(true);
       setLoading(false);
       return;
     }
-    
+
     if (authLoading) return;
-    
+
     if (!user) {
       navigate('/auth');
       return;
@@ -41,14 +41,14 @@ export default function AdminPanel() {
 
   async function checkAdminRole() {
     if (!user) return;
-    
-    const { data } = await supabase
+
+    const { data, error } = await supabase
       .from('profiles')
       .select('role')
       .eq('user_id', user.id)
-      .single() as { data: { role: string } | null };
-    
-    setIsAdmin(data?.role === 'admin' || false);
+      .single() as { data: { role: string } | null; error: unknown };
+
+    setIsAdmin(!error && data?.role === 'admin');
     setLoading(false);
   }
 

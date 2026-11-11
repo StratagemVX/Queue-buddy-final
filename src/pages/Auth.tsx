@@ -5,21 +5,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Activity, Loader2, ArrowLeft, User, Stethoscope, Shield } from 'lucide-react';
+import { Activity, Loader2, ArrowLeft, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 
 const emailSchema = z.string().email('Please enter a valid email address');
-const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');
+const passwordSchema = z.string().min(8, 'Password must be at least 8 characters');
 const nameSchema = z.string().min(2, 'Name must be at least 2 characters');
-
-type UserRole = 'patient' | 'doctor' | 'admin';
 
 export default function Auth() {
   const [searchParams] = useSearchParams();
   const [isSignUp, setIsSignUp] = useState(searchParams.get('mode') === 'signup');
-  const [selectedRole, setSelectedRole] = useState<UserRole>((searchParams.get('role') as UserRole) || 'patient');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -80,7 +76,7 @@ export default function Auth() {
     
     try {
       if (isSignUp) {
-        const { error } = await signUp(email, password, fullName, selectedRole, phone);
+        const { error } = await signUp(email, password, fullName, 'patient', phone);
         if (error) {
           if (error.message.includes('already registered')) {
             toast({
@@ -98,7 +94,7 @@ export default function Auth() {
         } else {
           toast({
             title: 'Account created!',
-            description: `Welcome to MediQueue. You're registered as a ${selectedRole}.`,
+            description: 'Welcome to MediQueue. Your patient account is ready.',
           });
           navigate('/dashboard');
         }
@@ -129,22 +125,6 @@ export default function Auth() {
     }
   };
 
-  const getRoleIcon = (role: UserRole) => {
-    switch (role) {
-      case 'patient': return <User className="h-4 w-4" />;
-      case 'doctor': return <Stethoscope className="h-4 w-4" />;
-      case 'admin': return <Shield className="h-4 w-4" />;
-    }
-  };
-
-  const getRoleDescription = (role: UserRole) => {
-    switch (role) {
-      case 'patient': return 'Book appointments and track your queue position';
-      case 'doctor': return 'Manage your patient queue and appointments';
-      case 'admin': return 'Full system access for hospital administrators';
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-hero flex flex-col">
       {/* Back to Home */}
@@ -169,36 +149,19 @@ export default function Auth() {
             </CardTitle>
             <CardDescription>
               {isSignUp 
-                ? 'Choose your role and register to get started'
+                ? 'Register as a patient to book appointments and track your queue'
                 : 'Sign in to access your account'
               }
             </CardDescription>
           </CardHeader>
           
           <CardContent>
-            {/* Role Selection for Sign Up */}
             {isSignUp && (
-              <div className="mb-6">
-                <Label className="text-sm font-medium mb-3 block">Select Your Role</Label>
-                <Tabs value={selectedRole} onValueChange={(v) => setSelectedRole(v as UserRole)} className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="patient" className="flex items-center gap-1.5 text-xs">
-                      <User className="h-3.5 w-3.5" />
-                      Patient
-                    </TabsTrigger>
-                    <TabsTrigger value="doctor" className="flex items-center gap-1.5 text-xs">
-                      <Stethoscope className="h-3.5 w-3.5" />
-                      Doctor
-                    </TabsTrigger>
-                    <TabsTrigger value="admin" className="flex items-center gap-1.5 text-xs">
-                      <Shield className="h-3.5 w-3.5" />
-                      Admin
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
-                <p className="text-xs text-muted-foreground mt-2 text-center">
-                  {getRoleDescription(selectedRole)}
-                </p>
+              <div className="mb-5 flex items-start gap-2 rounded-lg border border-border/60 bg-muted/40 p-3 text-xs text-muted-foreground">
+                <Shield className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span>
+                  Public registration creates patient accounts only. Doctor and administrator accounts are provisioned by hospital administrators.
+                </span>
               </div>
             )}
 
@@ -270,7 +233,7 @@ export default function Auth() {
                 disabled={loading}
               >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isSignUp ? `Create ${selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1)} Account` : 'Sign In'}
+                {isSignUp ? 'Create Patient Account' : 'Sign In'}
               </Button>
             </form>
             

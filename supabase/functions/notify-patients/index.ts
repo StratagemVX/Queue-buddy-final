@@ -4,39 +4,141 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
 interface NotificationPayload {
   doctor_id: string
   action: 'check_queue' | 'send_notification'
 }
 
+const allowedOrigins = (Deno.env.get('CORS_ALLOWED_ORIGINS') || '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean)
+
+const baseCorsHeaders = {
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Vary': 'Origin',
+}
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  return origin ? { ...baseCorsHeaders, 'Access-Control-Allow-Origin': origin } : baseCorsHeaders
+}
+
+function jsonResponse(
+  body: Record<string, unknown>,
+  status = 200,
+  origin: string | null = null,
+): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
+  })
+}
+
 serve(async (req) => {
-  // Handle CORS preflight
+  const origin = req.headers.get('Origin')
+
+  // Do not use wildcard CORS for a function holding the Supabase service-role key.
+  if (origin && !allowedOrigins.includes(origin)) {
+    return new Response('Origin not allowed', { status: 403, headers: baseCorsHeaders })
+  }
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders(origin),
+    })
+  }
+
+  if (req.method !== 'POST') {
+    return jsonResponse({ error: 'Method not allowed' }, 405, origin)
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
 
-    const { doctor_id, action }: NotificationPayload = await req.json()
+    if (!supabaseUrl || !serviceRoleKey || !anonKey) {
+      console.error('Missing required Supabase Edge Function environment configuration.')
+      return jsonResponse({ error: 'Notification service is not configured' }, 500, origin)
+    }
 
-    // Get notification threshold from settings
+    // Validate the caller's JWT using the public/anon client before using service-role access.
+    const authorization = req.headers.get('Authorization')
+    if (!authorization || !authorization.startsWith('Bearer ')) {
+      return jsonResponse({ error: 'Authentication required' }, 401, origin)
+    }
+
+    const authClient = createClient(supabaseUrl, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: authorization } },
+    })
+    const { data: authData, error: authError } = await authClient.auth.getUser()
+    if (authError || !authData.user) {
+      return jsonResponse({ error: 'Invalid or expired session' }, 401, origin)
+    }
+
+    // Use the service-role client only after authenticating the caller.
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+
+    const { data: callerProfile, error: callerProfileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('user_id', authData.user.id)
+      .maybeSingle()
+
+    if (callerProfileError) {
+      console.error('Unable to read caller role:', callerProfileError.message)
+      return jsonResponse({ error: 'Unable to verify account permissions' }, 500, origin)
+    }
+
+    if (!callerProfile || !['doctor', 'admin'].includes(callerProfile.role)) {
+      return jsonResponse({ error: 'Doctor or administrator role required' }, 403, origin)
+    }
+
+    const payload = await req.json() as NotificationPayload
+    const doctorId = typeof payload?.doctor_id === 'string' ? payload.doctor_id : ''
+    const action = payload?.action
+
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(doctorId)) {
+      return jsonResponse({ error: 'A valid doctor_id is required' }, 400, origin)
+    }
+    if (!['check_queue', 'send_notification'].includes(action)) {
+      return jsonResponse({ error: 'Unsupported notification action' }, 400, origin)
+    }
+
+    // A doctor can trigger notifications only for their own doctor record.
+    const { data: doctor, error: doctorError } = await supabase
+      .from('doctors')
+      .select('id, user_id')
+      .eq('id', doctorId)
+      .maybeSingle()
+
+    if (doctorError) {
+      console.error('Unable to verify doctor record:', doctorError.message)
+      return jsonResponse({ error: 'Unable to verify doctor access' }, 500, origin)
+    }
+    if (!doctor) {
+      return jsonResponse({ error: 'Doctor record not found' }, 404, origin)
+    }
+    if (callerProfile.role !== 'admin' && doctor.user_id !== authData.user.id) {
+      return jsonResponse({ error: 'You may only trigger notifications for your own queue' }, 403, origin)
+    }
+
+    // Get notification threshold from settings.
     const { data: settings } = await supabase
       .from('system_settings')
       .select('value')
       .eq('key', 'notification_threshold')
       .single()
 
-    const threshold = parseInt(settings?.value || '3')
+    const parsedThreshold = Number.parseInt(settings?.value || '3', 10)
+    const threshold = Number.isFinite(parsedThreshold) ? Math.min(Math.max(parsedThreshold, 1), 100) : 3
 
-    // Get SMS enabled setting
+    // Get SMS enabled setting.
     const { data: smsSettings } = await supabase
       .from('system_settings')
       .select('value')
@@ -45,7 +147,7 @@ serve(async (req) => {
 
     const smsEnabled = smsSettings?.value === 'true'
 
-    // Get push enabled setting
+    // Get push enabled setting.
     const { data: pushSettings } = await supabase
       .from('system_settings')
       .select('value')
@@ -55,36 +157,36 @@ serve(async (req) => {
     const pushEnabled = pushSettings?.value === 'true'
 
     if (!smsEnabled && !pushEnabled) {
-      return new Response(
-        JSON.stringify({ message: 'Notifications are disabled' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return jsonResponse({ message: 'Notifications are disabled' }, 200, origin)
     }
 
-    // Get current queue for the doctor
+    // Get current queue for the authorized doctor.
     const today = new Date().toISOString().split('T')[0]
-    
-    const { data: queue } = await supabase
+    const { data: queue, error: queueError } = await supabase
       .from('appointments')
       .select('id, token_number, patient_id')
-      .eq('doctor_id', doctor_id)
+      .eq('doctor_id', doctorId)
       .eq('appointment_date', today)
       .eq('status', 'waiting')
       .order('token_number')
 
-    if (!queue || queue.length < threshold) {
-      return new Response(
-        JSON.stringify({ message: 'Not enough patients in queue', queue_length: queue?.length || 0 }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    if (queueError) {
+      console.error('Unable to read doctor queue:', queueError.message)
+      return jsonResponse({ error: 'Unable to read queue' }, 500, origin)
     }
 
-    // Get the patient at the threshold position
+    if (!queue || queue.length < threshold) {
+      return jsonResponse({
+        message: 'Not enough patients in queue',
+        queue_length: queue?.length || 0,
+      }, 200, origin)
+    }
+
+    // Get the patient at the threshold position.
     const patientToNotify = queue[threshold - 1]
 
-    // Check if we already notified this patient recently (within last hour)
+    // Avoid sending duplicate notifications to the same patient within the last hour.
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
-    
     const { data: existingNotification } = await supabase
       .from('notification_logs')
       .select('id')
@@ -94,13 +196,10 @@ serve(async (req) => {
       .limit(1)
 
     if (existingNotification && existingNotification.length > 0) {
-      return new Response(
-        JSON.stringify({ message: 'Patient already notified recently' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return jsonResponse({ message: 'Patient already notified recently' }, 200, origin)
     }
 
-    // Get patient details
+    // Get patient details only after the doctor and queue authorization checks pass.
     const { data: profile } = await supabase
       .from('profiles')
       .select('full_name, phone, push_subscription')
@@ -108,93 +207,57 @@ serve(async (req) => {
       .single()
 
     if (!profile) {
-      return new Response(
-        JSON.stringify({ message: 'Patient profile not found' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return jsonResponse({ error: 'Patient profile not found' }, 404, origin)
     }
 
     const message = `Hi ${profile.full_name}, your turn is coming up! You are ${threshold} patients away. Token #${patientToNotify.token_number}. Please be ready.`
     const results: { sms?: boolean; push?: boolean } = {}
 
-    // Send SMS notification
+    // Replace these placeholders with provider-backed delivery before production use.
     if (smsEnabled && profile.phone) {
       try {
-        // Here you would integrate with your SMS provider (Twilio, etc.)
-        // For now, we'll just log it and mark as sent
-        console.log(`SMS to ${profile.phone}: ${message}`)
-        
-        // Log the notification
-        await supabase.from('notification_logs').insert({
-          appointment_id: patientToNotify.id,
-          patient_id: patientToNotify.patient_id,
-          notification_type: 'sms',
-          message,
-          status: 'sent',
-          sent_at: new Date().toISOString(),
-        })
-        
-        results.sms = true
-      } catch (error) {
-        console.error('SMS error:', error)
+        console.log('SMS provider integration is not configured for this function.')
         await supabase.from('notification_logs').insert({
           appointment_id: patientToNotify.id,
           patient_id: patientToNotify.patient_id,
           notification_type: 'sms',
           message,
           status: 'failed',
-          error_message: error.message,
+          error_message: 'SMS provider integration is not configured',
         })
+        results.sms = false
+      } catch (error) {
+        console.error('SMS notification logging error:', error)
         results.sms = false
       }
     }
 
-    // Send Push notification
     if (pushEnabled && profile.push_subscription) {
       try {
-        // Here you would send web push notification
-        // For now, we'll just log it
-        console.log(`Push notification to patient ${patientToNotify.patient_id}: ${message}`)
-        
-        await supabase.from('notification_logs').insert({
-          appointment_id: patientToNotify.id,
-          patient_id: patientToNotify.patient_id,
-          notification_type: 'push',
-          message,
-          status: 'sent',
-          sent_at: new Date().toISOString(),
-        })
-        
-        results.push = true
-      } catch (error) {
-        console.error('Push error:', error)
+        console.log('Push provider integration is not configured for this function.')
         await supabase.from('notification_logs').insert({
           appointment_id: patientToNotify.id,
           patient_id: patientToNotify.patient_id,
           notification_type: 'push',
           message,
           status: 'failed',
-          error_message: error.message,
+          error_message: 'Push provider integration is not configured',
         })
+        results.push = false
+      } catch (error) {
+        console.error('Push notification logging error:', error)
         results.push = false
       }
     }
 
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: 'Notification sent',
-        patient_token: patientToNotify.token_number,
-        results 
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-
+    return jsonResponse({
+      success: true,
+      message: 'Notification check completed',
+      patient_token: patientToNotify.token_number,
+      results,
+    }, 200, origin)
   } catch (error) {
-    console.error('Error:', error)
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    console.error('Notification function error:', error)
+    return jsonResponse({ error: 'An unexpected error occurred' }, 500, origin)
   }
 })

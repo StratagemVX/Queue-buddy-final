@@ -52,15 +52,15 @@ export default function DoctorDashboard() {
   const [useDemoMode, setUseDemoMode] = useState(false);
 
   useEffect(() => {
-    // Allow demo mode access without auth
-    if (checkDemoMode()) {
+    // Allow demo mode access strictly in development builds
+    if (import.meta.env.DEV && !import.meta.env.PROD && checkDemoMode()) {
       setUseDemoMode(true);
       loadDemoDoctor();
       return;
     }
-    
+
     if (authLoading) return;
-    
+
     if (!user) {
       navigate('/auth');
       return;
@@ -229,7 +229,7 @@ export default function DoctorDashboard() {
         .update({ 
           status: 'completed', 
           actual_end_time: new Date().toISOString() 
-        } as any)
+        })
         .eq('id', currentPatient.id);
     }
 
@@ -239,7 +239,7 @@ export default function DoctorDashboard() {
       .update({ 
         status: 'in_progress', 
         actual_start_time: new Date().toISOString() 
-      } as any)
+      })
       .eq('id', nextPatient.id);
 
     if (error) {
@@ -265,7 +265,7 @@ export default function DoctorDashboard() {
       .update({ 
         status: 'completed', 
         actual_end_time: new Date().toISOString() 
-      } as any)
+      })
       .eq('id', currentPatient.id);
 
     if (error) {
@@ -285,7 +285,7 @@ export default function DoctorDashboard() {
 
     const { error } = await supabase
       .from('appointments')
-      .update({ status: 'no_show' } as any)
+      .update({ status: 'no_show' })
       .eq('id', appointmentId);
 
     if (error) {
@@ -316,7 +316,7 @@ export default function DoctorDashboard() {
 
     const { error } = await supabase
       .from('appointments')
-      .update({ token_number: newToken } as any)
+      .update({ token_number: newToken })
       .eq('id', appointmentId);
 
     if (error) {
@@ -340,7 +340,7 @@ export default function DoctorDashboard() {
     
     const { error } = await supabase
       .from('doctors')
-      .update({ is_available: !doctor.is_available } as any)
+      .update({ is_available: !doctor.is_available })
       .eq('id', doctor.id);
 
     if (!error) {

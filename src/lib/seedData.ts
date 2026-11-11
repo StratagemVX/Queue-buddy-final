@@ -32,7 +32,7 @@ export async function seedDatabase() {
     for (const dept of seedDepartments) {
       const { error } = await supabase
         .from('departments')
-        .insert(dept as any);
+        .insert(dept);
       
       if (error && !error.message.includes('duplicate')) {
         console.error('Error inserting department:', error);
@@ -43,7 +43,7 @@ export async function seedDatabase() {
     for (const doc of seedDoctors) {
       const { error } = await supabase
         .from('doctors')
-        .insert(doc as any);
+        .insert(doc);
       
       if (error && !error.message.includes('duplicate')) {
         console.error('Error inserting doctor:', error);
